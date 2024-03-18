@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Speech.Recognition;
 using System.Threading;
+using static System.Runtime.CompilerServices.RuntimeHelpers;
+using static VoiceAttack.Program;
 
 namespace VoiceAttack
 {
@@ -66,7 +68,6 @@ namespace VoiceAttack
         {
             public int type;
             public InputUnion u;
-            public int duration;
         }
 
         /// <summary>
@@ -123,14 +124,13 @@ namespace VoiceAttack
         [DllImport("user32.dll")]
         private static extern IntPtr GetMessageExtraInfo();
 
- 
         /// <summary>
         /// Création d'un input clavier en mode Press and Release.
         /// </summary>
         /// <param name="key">Le ScanCode AZERTY de la touche clavier</param>
         /// <param name="duration">Le temps d'appui sur la touche</param>
         /// <returns>Un Input clavier</returns>
-        public static Input[] CreateKeyboardInput(ushort key, int duration)
+        public static Input[] CreateKeyboardInput(ushort key)
         {
             return new Input[] {
                 new() {
@@ -143,9 +143,11 @@ namespace VoiceAttack
                             wScan = key, // Z
                             dwFlags = (uint)(KeyEventF.KeyDown | KeyEventF.Scancode),
                             dwExtraInfo = GetMessageExtraInfo(),
+                            time = 0
+
                         }
                     },
-                    duration = duration
+
                 },
                 new()
                 {
@@ -158,9 +160,9 @@ namespace VoiceAttack
                             wScan = key, // Z
                             dwFlags = (uint)(KeyEventF.KeyUp | KeyEventF.Scancode),
                             dwExtraInfo = GetMessageExtraInfo(),
+                            time = 0
                         }
-                    },
-                    duration = 0
+                    },     
                 }
             };
         }
@@ -203,10 +205,12 @@ namespace VoiceAttack
             switch (profile)
             {
                 case "Default":
+
+                    macros.Add("test", new Input[][] { CreateKeyboardInput(0x11) });
                     break;
 
                 case "SC":
-                    macros.Add("demarage", new Input[][] { CreateKeyboardInput(0x13,1000) }); // TODO: Ajouter un Enum pour les touches clavier
+                    macros.Add("demarage", new Input[][] { CreateKeyboardInput(0x13) }); // TODO: Ajouter un Enum pour les touches clavier
                     break;
 
             //AJOUTEZ DES COMMANDES ICI
@@ -225,6 +229,7 @@ namespace VoiceAttack
             // COMMANDES PREDEFINIES
 
             choices.Add("Star Citizen");
+            choices.Add("Hook");
             choices.Add("stop");
 
 
@@ -262,19 +267,55 @@ namespace VoiceAttack
         /// Execute les inputs d'une macro
         /// </summary>
         /// <param name="key">Le nom de la macro a executer</param>
-        static void ExecuteCommand(String key)
+        static void ExecuteCommand(string key)
         {
-            foreach (Input[] sequence in macros[key])
+            if (macros.ContainsKey(key))
             {
-                foreach(Input input in sequence)
+                foreach (Input[] sequence in macros[key])
                 {
-                    Input[] singleInput = { input };
-                    SendInput(1, singleInput, Marshal.SizeOf(typeof(Input)));
-                    Thread.Sleep(input.duration); // TODO: utiliser le flag de INPUT
+                    foreach (Input input in sequence)
+                    {
+                        Input[] single = { input };
+                        if (input.type == (int)InputType.Keyboard && input.u.ki.dwFlags == 8)
+                        {
+                            // Pour KeyDown
+                            uint result = SendInput(1, single, Marshal.SizeOf(typeof(Input)));
+                          
+                            if (result == 0)
+                            {
+                                int error = Marshal.GetLastWin32Error();
+                                Console.WriteLine($"SendInput failed with error code {error}");
+                            }
+                            else
+                            {
+                                // DElAY pour la touche
+                                Thread.Sleep(1000);
+                                Console.WriteLine($"Sent key-down event successfully");
+                            }                           
+                        }
+                        else
+                        {
+                           // KEYUP
+                            uint result = SendInput(1, single, Marshal.SizeOf(typeof(Input)));
+                            if (result == 0)
+                            {
+                                int error = Marshal.GetLastWin32Error();
+                                Console.WriteLine($"SendInput failed with error code {error}");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Sent input event successfully");
+                            }
+                        }
+                    }
                 }
-
+            }
+            else
+            {
+                Console.WriteLine($"Macro '{key}' not found");
             }
         }
+
 
         /// <summary>
         /// Prend le résultat de la reconnaissance vocale et permet de choisir un profil.
@@ -291,9 +332,9 @@ namespace VoiceAttack
                     Rewrite("SC");
                     break;
 
-                case "avancer":
+                case "hook":
                     Console.WriteLine("sent");
-                    ExecuteCommand("forward");
+                    ExecuteCommand("test");
                     Console.WriteLine("end");
                     break;
                     // Add more commands here
