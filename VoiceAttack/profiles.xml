@@ -1,0 +1,11 @@
+<Default>
+    <Command>
+        <Trigger>test</Trigger>
+        <Inputs>
+            <Key>T</Key>
+            <Key>E</Key>
+            <Key>S</Key>
+            <Key>T</Key>
+        </Inputs>
+    </Command>
+</Default>
